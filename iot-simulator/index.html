@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Environmental Neuromorphic Hub</title>
+    <style>
+        :root {
+            --bg: #060913;
+            --surface: #0f1424;
+            --border: #1e2942;
+            --text: #f1f5f9;
+        }
+        body {
+            font-family: monospace;
+            background: var(--bg);
+            color: var(--text);
+            padding: 2rem;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+        .container { max-width: 950px; width: 100%; }
+        .panel {
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .flex-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px dashed var(--border);
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .pill { 
+            padding: 0.4rem 1rem; 
+            border-radius: 4px; 
+            font-weight: bold; 
+            font-size: 0.9rem;
+            border: 1px solid #22c55e;
+            background-color: #22c55e25;
+            color: #22c55e;
+            transition: all 0.2s ease;
+        }
+        .controller-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .action-btn {
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            background: rgba(255,255,255,0.02);
+            color: var(--text);
+            font-family: monospace;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.1s ease;
+        }
+        .action-btn:hover { background: rgba(255,255,255,0.08); border-color: #38bdf8; }
+        .action-btn:active { background: #3b82f633; transform: scale(0.98); }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat { background: #070a14; padding: 1rem; border-radius: 4px; border: 1px solid var(--border); }
+        .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; }
+        .value { font-size: 1.4rem; font-weight: bold; margin-top: 0.4rem; }
+        
+        .output-bus {
+            background: #000;
+            padding: 1.5rem;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border: 2px solid var(--border);
+            color: #64748b;
+            transition: all 0.2s ease;
+        }
+        .fire-flash {
+            background: #ef4444 !important;
+            color: #ffffff !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 0 25px #ef4444;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel">
+        <div class="flex-header">
+            <div>
+                <h2 style="margin:0; font-size:1.4rem;">🧠 ASYNCHRONOUS IoT CORE</h2>
+                <span style="font-size:0.8rem; color:#64748b;">Zero-Network Pure Local Simulation Engine</span>
+            </div>
+            <div id="state-pill" class="pill">QUIESCENT SLEEP</div>
+        </div>
+
+        <p style="color:#94a3b8; margin: 0 0 1.5rem 0;">Click these environmental sensor blocks to generate event spikes:</p>
+        
+        <div class="controller-grid">
+            <button class="action-btn" onclick="injectSensorSpike('humidity')">💧<br><b>DHT22 Hygrometer</b><br>Humidity (+0.25V)</button>
+            <button class="action-btn" onclick="injectSensorSpike('smoke')">💨<br><b>MQ-Sensor Array</b><br>Smoke (+0.35V)</button>
+            <button class="action-btn" onclick="injectSensorSpike('fire')">🔥<br><b>IR Optical Sensor</b><br>Flame (+0.50V)</button>
+            <button class="action-btn" onclick="toggleNoise()">🛑<br><b id="noise-btn-text">Filter Noise OFF</b><br>Inhibitory Drain</button>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat"><div class="label">Membrane Voltage (Vm)</div><div id="v-val" class="value">0.000</div></div>
+            <div class="stat"><div class="label">Network Power</div><div id="e-val" class="value">0.00 µJ</div></div>
+            <div class="stat"><div class="label">Correlation Weight</div><div id="w-val" class="value">0.350</div></div>
+            <div class="stat"><div class="label">Processor Loop</div><div class="value" style="color:#10b981">94.8% Idle</div></div>
+        </div>
+
+        <div id="bus-element" class="output-bus">BUS STATUS: ALL SAFETY CHANNELS CLEAR</div>
+    </div>
+</div>
+
+<script>
+    const V_REST = 0.0;
+    const V_THRES = 1.0;
+    const LEAK_RATE = 0.10;         
+    const INHIBITORY_DRAIN = 0.30;  
+    
+    const POWER_QUIESCENT = 1.8;    
+    const POWER_DATA_RX = 35.0;     
+    const POWER_HAZARD_RX = 70.0;   
+
+    let v = V_REST;
+    let total_energy_uj = 0.0;
+    const tick_duration = 0.05;     
+    let correlation_weight = 0.35;  
+    let last_smoke_time = 0.0;
+    let isAlarmActive = false;
+    let ambientNoiseActive = false;
+    
+    // Timer variable for the repeating sound pulse
+    let sirenIntervalTimer = null;
+
+    setInterval(() => {
+        total_energy_uj += POWER_QUIESCENT * tick_duration;
+        
+        v -= LEAK_RATE * (v - V_REST);
+        if (v < 0) v = V_REST;
+
+        if (ambientNoiseActive) {
+            v -= INHIBITORY_DRAIN;
+            if (v < 0) v = V_REST;
+        }
+
+        updateDisplayMetrics();
+    }, 50);
+
+    function injectSensorSpike(sensorType) {
+        if (isAlarmActive) return; 
+
+        let currentTime = Date.now() / 1000;
+
+        if (sensorType === 'humidity') {
+            v += 0.25;
+            total_energy_uj += POWER_DATA_RX;
+        } 
+        else if (sensorType === 'smoke') {
+            v += 0.35;
+            total_energy_uj += POWER_DATA_RX;
+            last_smoke_time = currentTime;
+        } 
+        else if (sensorType === 'fire') {
+            v += (0.50 + correlation_weight);
+            total_energy_uj += POWER_HAZARD_RX;
+            
+            let time_delta = currentTime - last_smoke_time;
+            if (time_delta < 0.8) {
+                correlation_weight = Math.min(1.0, correlation_weight + 0.12);
+            } else {
+                correlation_weight = Math.max(0.20, correlation_weight - 0.03);
+            }
+        }
+
+        if (v >= V_THRES) {
+            v = V_REST;
+            triggerAlarmResponse();
+        }
+
+        updateDisplayMetrics();
+    }
+
+    function toggleNoise() {
+        ambientNoiseActive = !ambientNoiseActive;
+        document.getElementById("noise-btn-text").innerText = ambientNoiseActive ? "Filter Noise ON" : "Filter Noise OFF";
+    }
+
+    // High-Pitch Safety Siren Tone (1200 Hz)
+    function fireSirenAudioPulse() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.type = 'square'; 
+            osc.frequency.setValueAtTime(1200, audioCtx.currentTime); 
+            
+            gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime); 
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25); 
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.25);
+        } catch (e) {
+            console.log("Audio Context blocked or unsupported.", e);
+        }
+    }
+
+    function triggerAlarmResponse() {
+        isAlarmActive = true;
+        const bus = document.getElementById("bus-element");
+        bus.innerText = "🚨 NEUROMORPHIC ALARM DISPATCHED: CRITICAL SAFETY HAZARD DETECTED!";
+        bus.classList.add("fire-flash");
+        
+        // Start continuous repeating sound pulse sequence (Fires every 350ms)
+        fireSirenAudioPulse(); 
+        sirenIntervalTimer = setInterval(fireSirenAudioPulse, 350);
+        
+        setTimeout(() => {
+            // Stop the continuous sound loop when the 2-second alert window finishes
+            clearInterval(sirenIntervalTimer);
+            
+            bus.innerText = "BUS STATUS: ALL SAFETY CHANNELS CLEAR";
+            bus.classList.remove("fire-flash");
+            isAlarmActive = false;
+        }, 2000);
+    }
+
+    function updateDisplayMetrics() {
+        document.getElementById("v-val").innerText = v.toFixed(3);
+        document.getElementById("e-val").innerText = total_energy_uj.toFixed(2) + " µJ";
+        document.getElementById("w-val").innerText = correlation_weight.toFixed(3);
+        
+        const pill = document.getElementById("state-pill");
+        if (isAlarmActive) {
+            pill.innerText = "🚨 ALARM DISPATCHED";
+            pill.style.color = "#ef4444"; pill.style.backgroundColor = "#ef444425"; pill.style.borderColor = "#ef4444";
+        } else if (ambientNoiseActive) {
+            pill.innerText = "NOISE FILTER MODE ACTIVE";
+            pill.style.color = "#3b82f6"; pill.style.backgroundColor = "#3b82f625"; pill.style.borderColor = "#3b82f6";
+        } else if (v > 0.1) {
+            pill.innerText = "ANALYZING ENVIRONMENT...";
+            pill.style.color = "#eab308"; pill.style.backgroundColor = "#eab30825"; pill.style.borderColor = "#eab308";
+        } else {
+            pill.innerText = "QUIESCENT SLEEP";
+            pill.style.color = "#22c55e"; pill.style.backgroundColor = "#22c55e25"; pill.style.borderColor = "#22c55e";
+        }
+    }
+</script>
+</body>
+</html>
